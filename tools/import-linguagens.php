@@ -407,7 +407,7 @@ function languageEggs(string $author): array
                 'Ruby 3.3' => 'ruby:3.3-slim',
                 'Ruby 3.2' => 'ruby:3.2-slim',
             ],
-            'if [ -f Gemfile ]; then bundle install; fi',
+            'gem install bundler --no-document && if [ -f Gemfile ]; then bundle install; fi',
             'ruby app.rb',
             'ruby:3.4-slim'
         ),
@@ -450,7 +450,7 @@ function languageEgg(
                 'entrypoint' => 'bash',
             ],
         ],
-        'variables' => commonVariables($defaultStartCommand, $defaultInstallCommand),
+        'variables' => commonVariables($defaultStartCommand),
     ];
 }
 
@@ -466,43 +466,28 @@ echo "Starting generic language app installation"
 
 if command -v apt >/dev/null 2>&1; then
     apt update
-    apt install -y git curl jq file unzip tar ca-certificates
+    apt install -y curl jq file unzip tar ca-certificates build-essential
 fi
 
 mkdir -p /mnt/server
 cd /mnt/server
 
-if [[ "${USER_UPLOAD}" != "1" ]] && [[ -n "${GIT_ADDRESS}" ]]; then
-    if [[ -d .git ]]; then
-        echo "Existing git repository found, pulling latest changes"
-        git pull --ff-only || true
-    elif [[ -z "$(ls -A .)" ]]; then
-        echo "Cloning ${GIT_ADDRESS}"
-        git clone --depth 1 --single-branch --branch "${BRANCH:-main}" "${GIT_ADDRESS}" .
-    else
-        echo "Server directory is not empty, skipping git clone"
-    fi
-fi
+BUILTIN_INSTALL_CMD='__BUILTIN_INSTALL_CMD__'
 
-DEFAULT_INSTALL_CMD='__DEFAULT_INSTALL_CMD__'
-
-if [[ -n "${INSTALL_CMD}" ]]; then
-    echo "Running custom install command"
-    eval "${INSTALL_CMD}"
-elif [[ -n "${DEFAULT_INSTALL_CMD}" ]]; then
-    echo "Running default install command"
-    eval "${DEFAULT_INSTALL_CMD}"
+if [[ -n "${BUILTIN_INSTALL_CMD}" ]]; then
+    echo "Running built-in install command"
+    eval "${BUILTIN_INSTALL_CMD}"
 else
-    echo "No install command configured"
+    echo "No built-in install step needed"
 fi
 
 echo "Install complete"
 SCRIPT;
 
-    return str_replace('__DEFAULT_INSTALL_CMD__', $escapedDefault, $script);
+    return str_replace('__BUILTIN_INSTALL_CMD__', $escapedDefault, $script);
 }
 
-function commonVariables(string $defaultStartCommand, string $defaultInstallCommand): array
+function commonVariables(string $defaultStartCommand): array
 {
     return [
         variable(
@@ -518,34 +503,6 @@ function commonVariables(string $defaultStartCommand, string $defaultInstallComm
             'CMD2',
             '',
             'nullable|string|max:512'
-        ),
-        variable(
-            'Comando de instalacao',
-            "Comando executado durante a instalacao.\r\nDeixe em branco para usar o padrao: " . ($defaultInstallCommand ?: 'nenhum'),
-            'INSTALL_CMD',
-            '',
-            'nullable|string|max:1024'
-        ),
-        variable(
-            'Repositorio Git',
-            "Repositorio Git publico para clonar na instalacao.\r\nDeixe em branco se for enviar os arquivos manualmente.",
-            'GIT_ADDRESS',
-            '',
-            'nullable|string|max:256'
-        ),
-        variable(
-            'Branch Git',
-            'Branch usada ao clonar o repositorio Git.',
-            'BRANCH',
-            'main',
-            'required|string|max:64'
-        ),
-        variable(
-            'Upload manual',
-            'Use 1 para ignorar clone Git e manter somente arquivos enviados pelo usuario. Use 0 para permitir clone Git.',
-            'USER_UPLOAD',
-            '0',
-            'required|boolean'
         ),
     ];
 }

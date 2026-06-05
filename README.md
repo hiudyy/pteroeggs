@@ -17,21 +17,17 @@ O script cria ou reutiliza o nest `Linguagens` e importa/atualiza estes eggs:
 - PHP
 - Ruby
 
-Os eggs usam formato `PTDL_v2` e deixam o usuario configurar os comandos principais pelo painel:
+Os eggs usam formato `PTDL_v2`, com instalacao padrao embutida para cada linguagem, e deixam o usuario configurar apenas os comandos de inicializacao pelo painel:
 
 - `CMD1`: comando principal para iniciar a aplicacao.
 - `CMD2`: comando opcional executado antes do comando principal.
-- `INSTALL_CMD`: comando customizado executado na instalacao.
-- `GIT_ADDRESS`: repositorio Git opcional para clonar.
-- `BRANCH`: branch usada no clone Git.
-- `USER_UPLOAD`: use `1` para ignorar Git e usar arquivos enviados manualmente.
 
 ## Comando Unico
 
 Rode este comando no servidor onde o Pterodactyl Panel esta instalado:
 
 ```bash
-bash -c 'set -e; tmp="$(mktemp -d)"; git clone --depth 1 https://github.com/hiudyy/pteroeggs "$tmp"; php "$tmp/tools/import-linguagens.php"'
+bash -c 'set -e; tmp="$(mktemp -d)"; curl -fsSL https://raw.githubusercontent.com/hiudyy/pteroeggs/main/tools/import-linguagens.php -o "$tmp/import-linguagens.php"; php "$tmp/import-linguagens.php"'
 ```
 
 O script vai perguntar:
@@ -66,7 +62,7 @@ Continuar com a importacao? [S/n]: s
 Tambem da para passar tudo por parametro, sem perguntas, ainda puxando direto do repo:
 
 ```bash
-bash -c 'set -e; tmp="$(mktemp -d)"; git clone --depth 1 https://github.com/hiudyy/pteroeggs "$tmp"; php "$tmp/tools/import-linguagens.php" --panel=/var/www/pterodactyl --nest=Linguagens --author=admin@seudominio.com'
+bash -c 'set -e; tmp="$(mktemp -d)"; curl -fsSL https://raw.githubusercontent.com/hiudyy/pteroeggs/main/tools/import-linguagens.php -o "$tmp/import-linguagens.php"; php "$tmp/import-linguagens.php" --panel=/var/www/pterodactyl --nest=Linguagens --author=admin@seudominio.com'
 ```
 
 ## Testar Sem Importar
@@ -74,13 +70,13 @@ bash -c 'set -e; tmp="$(mktemp -d)"; git clone --depth 1 https://github.com/hiud
 Para listar os eggs sem conectar no Panel e sem alterar o banco:
 
 ```bash
-bash -c 'set -e; tmp="$(mktemp -d)"; git clone --depth 1 https://github.com/hiudyy/pteroeggs "$tmp"; php "$tmp/tools/import-linguagens.php" --dry-run'
+bash -c 'set -e; tmp="$(mktemp -d)"; curl -fsSL https://raw.githubusercontent.com/hiudyy/pteroeggs/main/tools/import-linguagens.php -o "$tmp/import-linguagens.php"; php "$tmp/import-linguagens.php" --dry-run'
 ```
 
 ## Requisitos
 
 - Rodar no servidor que tem acesso aos arquivos do Pterodactyl Panel.
-- Ter `git` instalado para puxar o repositorio.
+- Ter `curl` instalado para baixar o script pelo comando unico.
 - O Panel precisa estar instalado e com `vendor/autoload.php`, `artisan` e `.env` funcionando.
 - O comando `php` precisa ser o PHP usado pelo Panel.
 - O usuario que roda o comando precisa conseguir ler a pasta do Panel e acessar o banco usando as configuracoes do `.env`.
