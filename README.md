@@ -1,10 +1,16 @@
 # PteroConfig
 
-Utilitario para criar um nest `Linguagens` no Pterodactyl Panel e importar eggs genericos para varias linguagens de programacao.
+Utilitario para criar nests no Pterodactyl Panel e importar eggs genericos para linguagens, bancos de dados, web e proxy.
 
 ## O Que Ele Importa
 
-O script cria ou reutiliza o nest `Linguagens` e importa/atualiza estes eggs:
+O script cria ou reutiliza estes nests:
+
+- `Linguagens`
+- `Bancos de Dados`
+- `Web & Proxy`
+
+Eggs de `Linguagens`:
 
 - NodeJS
 - Python
@@ -17,10 +23,29 @@ O script cria ou reutiliza o nest `Linguagens` e importa/atualiza estes eggs:
 - PHP
 - Ruby
 
-Os eggs usam formato `PTDL_v2`, com instalacao padrao embutida para cada linguagem, e deixam o usuario configurar apenas os comandos de inicializacao pelo painel:
+Eggs de `Bancos de Dados`:
+
+- MariaDB
+- PostgreSQL
+- MongoDB
+- Redis
+- Valkey
+
+Eggs de `Web & Proxy`:
+
+- Nginx Static Site
+- Nginx Reverse Proxy
+- Caddy Static Site
+- Caddy Reverse Proxy
+- Apache Static Site
+- PHP Web Server
+
+Os eggs usam formato `PTDL_v2`, com instalacao padrao embutida para cada tipo de servico. Nos eggs de linguagens, o usuario configura apenas os comandos de inicializacao pelo painel:
 
 - `CMD1`: comando principal para iniciar a aplicacao.
 - `CMD2`: comando opcional executado antes do comando principal.
+
+Nos eggs de banco e web/proxy, o script tambem cria variaveis especificas quando necessario, por exemplo senha do banco ou destino do proxy.
 
 ## Comando Unico
 
@@ -33,7 +58,6 @@ bash -c 'set -e; tmp="$(mktemp -d)"; curl -fsSL https://raw.githubusercontent.co
 O script vai perguntar:
 
 - pasta do Pterodactyl Panel, por exemplo `/var/www/pterodactyl`
-- nome do nest, por padrao `Linguagens`
 - email/autor dos eggs
 - confirmacao antes de importar
 
@@ -42,16 +66,16 @@ As credenciais do banco nao precisam ser digitadas. O script carrega o proprio P
 ## Exemplo De Execucao
 
 ```txt
-Importador de eggs de linguagens para Pterodactyl
+Importador de eggs para Pterodactyl
 As credenciais do banco serao lidas automaticamente do .env do Panel.
+Packs importados: Linguagens, Bancos de Dados, Web & Proxy.
 
 Pasta do Pterodactyl Panel [/var/www/pterodactyl]: /var/www/pterodactyl
-Nome do nest [Linguagens]: Linguagens
 Email/autor dos eggs [pteroconfig@example.com]: admin@seudominio.com
 
 Resumo:
   Panel: /var/www/pterodactyl
-  Nest: Linguagens
+  Nests: Linguagens, Bancos de Dados, Web & Proxy
   Autor: admin@seudominio.com
 
 Continuar com a importacao? [S/n]: s
@@ -62,7 +86,7 @@ Continuar com a importacao? [S/n]: s
 Tambem da para passar tudo por parametro, sem perguntas, ainda puxando direto do repo:
 
 ```bash
-bash -c 'set -e; tmp="$(mktemp -d)"; curl -fsSL https://raw.githubusercontent.com/hiudyy/pteroeggs/main/tools/import-linguagens.php -o "$tmp/import-linguagens.php"; php "$tmp/import-linguagens.php" --panel=/var/www/pterodactyl --nest=Linguagens --author=admin@seudominio.com'
+bash -c 'set -e; tmp="$(mktemp -d)"; curl -fsSL https://raw.githubusercontent.com/hiudyy/pteroeggs/main/tools/import-linguagens.php -o "$tmp/import-linguagens.php"; php "$tmp/import-linguagens.php" --panel=/var/www/pterodactyl --author=admin@seudominio.com'
 ```
 
 ## Testar Sem Importar
