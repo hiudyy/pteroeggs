@@ -18,21 +18,69 @@ main($argv);
 function main(array $argv): void
 {
     $options = parseOptions($argv);
+    $lang = normalizeLanguage($options['lang']) ?? 'pt';
 
     if ($options['help']) {
-        printUsage();
+        printUsage($lang);
         return;
     }
-
-    $options = completeOptions($options);
 
     $author = $options['author'] ?: DEFAULT_AUTHOR;
     $packs = eggPacks($author);
 
     if ($options['dry-run']) {
-        printDryRun($author, $packs);
+        printDryRun($lang, $author, $packs);
         return;
     }
+
+    if ($options['interactive'] || $options['panel'] === null) {
+        if (!canPrompt() && !$options['interactive']) {
+            fail(t($lang, 'non_interactive_panel_required'));
+        }
+
+        $lang = normalizeLanguage($options['lang']) ?? chooseLanguage();
+        menuLoop($lang, $options);
+        return;
+    }
+
+    runImport($lang, $options);
+}
+
+function menuLoop(string $lang, array $options): void
+{
+    while (true) {
+        out('');
+        out(t($lang, 'app_title'));
+        out(t($lang, 'menu_import'));
+        out(t($lang, 'menu_exit'));
+        out('');
+
+        $choice = promptRaw(t($lang, 'menu_prompt'));
+
+        if ($choice === '1') {
+            $importOptions = askImportOptions($lang, $options);
+
+            if ($importOptions === null) {
+                continue;
+            }
+
+            runImport($lang, $importOptions);
+            continue;
+        }
+
+        if ($choice === '0') {
+            out(t($lang, 'bye'));
+            return;
+        }
+
+        out(t($lang, 'invalid_option'));
+    }
+}
+
+function runImport(string $lang, array $options): void
+{
+    $author = $options['author'] ?: DEFAULT_AUTHOR;
+    $packs = eggPacks($author);
 
     $panelPath = assertPanelPath($options['panel']);
     $app = bootstrapPanel($panelPath);
@@ -41,19 +89,19 @@ function main(array $argv): void
     $totalUpdated = 0;
 
     foreach ($packs as $pack) {
-        $nest = findOrCreateNest($app, $pack['name'], $pack['description'], $author);
-        [$created, $updated] = importEggs($app, $nest, $pack['eggs']);
+        $nest = findOrCreateNest($app, $pack['name'], $pack['description'], $author, $lang);
+        [$created, $updated] = importEggs($app, $nest, $pack['eggs'], $lang);
         $totalCreated += $created;
         $totalUpdated += $updated;
 
-        out('Nest: ' . $nest->name . ' (#' . $nest->id . ')');
-        out('Eggs criados neste nest: ' . $created);
-        out('Eggs atualizados neste nest: ' . $updated);
+        out(t($lang, 'nest_summary', ['nest' => $nest->name, 'id' => (string) $nest->id]));
+        out(t($lang, 'nest_created_count', ['count' => (string) $created]));
+        out(t($lang, 'nest_updated_count', ['count' => (string) $updated]));
         out('');
     }
 
-    out('Total de eggs criados: ' . $totalCreated);
-    out('Total de eggs atualizados: ' . $totalUpdated);
+    out(t($lang, 'total_created', ['count' => (string) $totalCreated]));
+    out(t($lang, 'total_updated', ['count' => (string) $totalUpdated]));
 }
 
 function parseOptions(array $argv): array
@@ -61,6 +109,7 @@ function parseOptions(array $argv): array
     $result = [
         'panel' => null,
         'author' => null,
+        'lang' => null,
         'dry-run' => false,
         'interactive' => false,
         'help' => false,
@@ -82,7 +131,7 @@ function parseOptions(array $argv): array
             continue;
         }
 
-        foreach (['panel', 'author'] as $key) {
+        foreach (['panel', 'author', 'lang'] as $key) {
             $prefix = '--' . $key . '=';
             if (str_starts_with($arg, $prefix)) {
                 $result[$key] = substr($arg, strlen($prefix));
@@ -101,58 +150,42 @@ function parseOptions(array $argv): array
     return $result;
 }
 
-function completeOptions(array $options): array
+function askImportOptions(string $lang, array $options): ?array
 {
-    if ($options['dry-run']) {
-        $options['author'] = $options['author'] ?: DEFAULT_AUTHOR;
-
-        return $options;
-    }
-
-    $shouldPrompt = $options['interactive'] || $options['panel'] === null;
-
-    if (!$shouldPrompt) {
-        $options['author'] = $options['author'] ?: DEFAULT_AUTHOR;
-
-        return $options;
-    }
-
-    if (!canPrompt()) {
-        fail('Informe --panel=/caminho/do/panel ao executar sem terminal interativo.');
-    }
-
-    out('Importador de eggs para Pterodactyl');
-    out('As credenciais do banco serao lidas automaticamente do .env do Panel.');
-    out('Packs importados: Linguagens, Bancos de Dados, Web & Proxy.');
+    out(t($lang, 'import_header'));
+    out(t($lang, 'env_notice'));
+    out(t($lang, 'packs_notice'));
     out('');
 
-    $options['panel'] = prompt('Pasta do Pterodactyl Panel', $options['panel'] ?: '/var/www/pterodactyl');
-    $options['author'] = prompt('Email/autor dos eggs', $options['author'] ?: DEFAULT_AUTHOR);
+    $options['panel'] = prompt(t($lang, 'panel_path'), $options['panel'] ?: '/var/www/pterodactyl');
+    $options['author'] = prompt(t($lang, 'author_email'), $options['author'] ?: DEFAULT_AUTHOR);
 
     out('');
-    out('Resumo:');
-    out('  Panel: ' . $options['panel']);
-    out('  Nests: Linguagens, Bancos de Dados, Web & Proxy');
-    out('  Autor: ' . $options['author']);
+    out(t($lang, 'summary'));
+    out(t($lang, 'summary_panel', ['panel' => $options['panel']]));
+    out(t($lang, 'summary_nests'));
+    out(t($lang, 'summary_author', ['author' => $options['author']]));
     out('');
 
-    if (!confirm('Continuar com a importacao?', true)) {
-        fail('Importacao cancelada.');
+    if (!confirm(t($lang, 'confirm_import'), true, $lang)) {
+        out(t($lang, 'import_cancelled'));
+        return null;
     }
 
     return $options;
 }
 
-function printUsage(): void
+function printUsage(string $lang): void
 {
-    out('Uso: php tools/import-linguagens.php --panel=/var/www/pterodactyl [opcoes]');
+    out(t($lang, 'usage'));
     out('');
-    out('Opcoes:');
-    out('  --panel=/caminho       Raiz do Pterodactyl Panel. Se omitir, o script pergunta.');
-    out('  --author=email         Autor usado nos eggs criados.');
-    out('  --interactive          Pergunta pasta do Panel, nest e autor mesmo com flags.');
-    out('  --dry-run              Lista os eggs sem conectar ao Panel.');
-    out('  --help                 Mostra esta ajuda.');
+    out(t($lang, 'options'));
+    out(t($lang, 'usage_panel'));
+    out(t($lang, 'usage_author'));
+    out(t($lang, 'usage_lang'));
+    out(t($lang, 'usage_interactive'));
+    out(t($lang, 'usage_dry_run'));
+    out(t($lang, 'usage_help'));
 }
 
 function assertPanelPath(string $path): string
@@ -160,11 +193,11 @@ function assertPanelPath(string $path): string
     $realPath = realpath($path);
 
     if ($realPath === false) {
-        fail('Caminho do Panel nao existe: ' . $path);
+        fail('Panel path does not exist: ' . $path);
     }
 
     if (!is_file($realPath . '/artisan') || !is_file($realPath . '/bootstrap/app.php')) {
-        fail('Caminho informado nao parece ser a raiz do Pterodactyl Panel: ' . $realPath);
+        fail('Path does not look like the Pterodactyl Panel root: ' . $realPath);
     }
 
     return $realPath;
@@ -180,12 +213,12 @@ function bootstrapPanel(string $panelPath): mixed
     return $app;
 }
 
-function findOrCreateNest(mixed $app, string $nestName, string $description, string $author): Nest
+function findOrCreateNest(mixed $app, string $nestName, string $description, string $author, string $lang): Nest
 {
     $nest = Nest::query()->where('name', $nestName)->first();
 
     if ($nest instanceof Nest) {
-        out('Reutilizando nest existente: ' . $nest->name . ' (#' . $nest->id . ')');
+        out(t($lang, 'nest_reused', ['nest' => $nest->name, 'id' => (string) $nest->id]));
         return $nest;
     }
 
@@ -196,12 +229,12 @@ function findOrCreateNest(mixed $app, string $nestName, string $description, str
         'description' => $description,
     ], $author);
 
-    out('Criado nest: ' . $nest->name . ' (#' . $nest->id . ')');
+    out(t($lang, 'nest_created', ['nest' => $nest->name, 'id' => (string) $nest->id]));
 
     return $nest;
 }
 
-function importEggs(mixed $app, Nest $nest, array $eggs): array
+function importEggs(mixed $app, Nest $nest, array $eggs, string $lang): array
 {
     /** @var EggImporterService $importer */
     $importer = $app->make(EggImporterService::class);
@@ -223,11 +256,11 @@ function importEggs(mixed $app, Nest $nest, array $eggs): array
             if ($existing instanceof Egg) {
                 $updater->handle($existing, $file);
                 $updated++;
-                out('Atualizado egg: ' . $egg['name']);
+                out(t($lang, 'egg_updated', ['egg' => $egg['name']]));
             } else {
                 $importer->handle($file, $nest->id);
                 $created++;
-                out('Criado egg: ' . $egg['name']);
+                out(t($lang, 'egg_created', ['egg' => $egg['name']]));
             }
         } finally {
             @unlink($file->getPathname());
@@ -242,7 +275,7 @@ function uploadedJsonFile(array $egg): UploadedFile
     $path = tempnam(sys_get_temp_dir(), 'ptero-egg-');
 
     if ($path === false) {
-        fail('Nao foi possivel criar arquivo temporario para importacao.');
+        fail('Could not create temporary import file.');
     }
 
     file_put_contents($path, json_encode($egg, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
@@ -256,14 +289,14 @@ function uploadedJsonFile(array $egg): UploadedFile
     );
 }
 
-function printDryRun(string $author, array $packs): void
+function printDryRun(string $lang, string $author, array $packs): void
 {
-    out('Autor: ' . $author);
+    out(t($lang, 'dry_author', ['author' => $author]));
 
     foreach ($packs as $pack) {
         out('');
-        out('Nest: ' . $pack['name']);
-        out('Eggs:');
+        out(t($lang, 'dry_nest', ['nest' => $pack['name']]));
+        out(t($lang, 'dry_eggs'));
 
         foreach ($pack['eggs'] as $egg) {
             $images = implode(', ', array_keys($egg['docker_images']));
@@ -791,9 +824,152 @@ function slug(string $value): string
     return 'egg-' . trim($value, '-');
 }
 
+function chooseLanguage(): string
+{
+    while (true) {
+        out('');
+        out('Select language / Selecione o idioma');
+        out('1) Portugues');
+        out('2) English');
+        out('');
+
+        $choice = strtolower(promptRaw('pt/en [pt]'));
+
+        if ($choice === '' || in_array($choice, ['1', 'pt', 'br', 'portugues', 'portuguese'], true)) {
+            return 'pt';
+        }
+
+        if (in_array($choice, ['2', 'en', 'eng', 'english', 'ingles'], true)) {
+            return 'en';
+        }
+
+        out('Invalid option / Opcao invalida');
+    }
+}
+
+function normalizeLanguage(?string $lang): ?string
+{
+    if ($lang === null || $lang === '') {
+        return null;
+    }
+
+    $lang = strtolower($lang);
+
+    return match ($lang) {
+        'pt', 'br', 'pt-br', 'portugues', 'portuguese' => 'pt',
+        'en', 'eng', 'en-us', 'english', 'ingles' => 'en',
+        default => null,
+    };
+}
+
+function t(string $lang, string $key, array $vars = []): string
+{
+    $translations = translations();
+    $message = $translations[$lang][$key] ?? $translations['pt'][$key] ?? $key;
+
+    foreach ($vars as $name => $value) {
+        $message = str_replace('{' . $name . '}', $value, $message);
+    }
+
+    return $message;
+}
+
+function translations(): array
+{
+    return [
+        'pt' => [
+            'app_title' => 'Ptero Eggs Manager',
+            'menu_import' => '1) Importar eggs',
+            'menu_exit' => '0) Sair',
+            'menu_prompt' => 'Escolha uma opcao',
+            'invalid_option' => 'Opcao invalida.',
+            'bye' => 'Saindo. Nenhuma outra acao sera executada.',
+            'non_interactive_panel_required' => 'Informe --panel=/caminho/do/panel ao executar sem terminal interativo.',
+            'import_header' => 'Importador de eggs para Pterodactyl',
+            'env_notice' => 'As credenciais do banco serao lidas automaticamente do .env do Panel.',
+            'packs_notice' => 'Packs importados: Linguagens, Bancos de Dados, Web & Proxy.',
+            'panel_path' => 'Pasta do Pterodactyl Panel',
+            'author_email' => 'Email/autor dos eggs',
+            'summary' => 'Resumo:',
+            'summary_panel' => '  Panel: {panel}',
+            'summary_nests' => '  Nests: Linguagens, Bancos de Dados, Web & Proxy',
+            'summary_author' => '  Autor: {author}',
+            'confirm_import' => 'Continuar com a importacao?',
+            'import_cancelled' => 'Importacao cancelada.',
+            'usage' => 'Uso: php tools/import-linguagens.php --panel=/var/www/pterodactyl [opcoes]',
+            'options' => 'Opcoes:',
+            'usage_panel' => '  --panel=/caminho       Raiz do Pterodactyl Panel. Se omitir, abre o menu interativo.',
+            'usage_author' => '  --author=email         Autor usado nos eggs criados.',
+            'usage_lang' => '  --lang=pt|en           Idioma da interface.',
+            'usage_interactive' => '  --interactive          Forca o menu interativo.',
+            'usage_dry_run' => '  --dry-run              Lista os eggs sem conectar ao Panel.',
+            'usage_help' => '  --help                 Mostra esta ajuda.',
+            'nest_reused' => 'Reutilizando nest existente: {nest} (#{id})',
+            'nest_created' => 'Criado nest: {nest} (#{id})',
+            'egg_updated' => 'Atualizado egg: {egg}',
+            'egg_created' => 'Criado egg: {egg}',
+            'nest_summary' => 'Nest: {nest} (#{id})',
+            'nest_created_count' => 'Eggs criados neste nest: {count}',
+            'nest_updated_count' => 'Eggs atualizados neste nest: {count}',
+            'total_created' => 'Total de eggs criados: {count}',
+            'total_updated' => 'Total de eggs atualizados: {count}',
+            'dry_author' => 'Autor: {author}',
+            'dry_nest' => 'Nest: {nest}',
+            'dry_eggs' => 'Eggs:',
+        ],
+        'en' => [
+            'app_title' => 'Ptero Eggs Manager',
+            'menu_import' => '1) Import eggs',
+            'menu_exit' => '0) Exit',
+            'menu_prompt' => 'Choose an option',
+            'invalid_option' => 'Invalid option.',
+            'bye' => 'Exiting. No other action will be executed.',
+            'non_interactive_panel_required' => 'Pass --panel=/path/to/panel when running without an interactive terminal.',
+            'import_header' => 'Pterodactyl egg importer',
+            'env_notice' => 'Database credentials will be read automatically from the Panel .env file.',
+            'packs_notice' => 'Imported packs: Languages, Databases, Web & Proxy.',
+            'panel_path' => 'Pterodactyl Panel path',
+            'author_email' => 'Egg author/email',
+            'summary' => 'Summary:',
+            'summary_panel' => '  Panel: {panel}',
+            'summary_nests' => '  Nests: Linguagens, Bancos de Dados, Web & Proxy',
+            'summary_author' => '  Author: {author}',
+            'confirm_import' => 'Continue with the import?',
+            'import_cancelled' => 'Import cancelled.',
+            'usage' => 'Usage: php tools/import-linguagens.php --panel=/var/www/pterodactyl [options]',
+            'options' => 'Options:',
+            'usage_panel' => '  --panel=/path         Pterodactyl Panel root. If omitted, opens the interactive menu.',
+            'usage_author' => '  --author=email       Author used for created eggs.',
+            'usage_lang' => '  --lang=pt|en         Interface language.',
+            'usage_interactive' => '  --interactive        Force the interactive menu.',
+            'usage_dry_run' => '  --dry-run            List eggs without connecting to the Panel.',
+            'usage_help' => '  --help               Show this help.',
+            'nest_reused' => 'Reusing existing nest: {nest} (#{id})',
+            'nest_created' => 'Created nest: {nest} (#{id})',
+            'egg_updated' => 'Updated egg: {egg}',
+            'egg_created' => 'Created egg: {egg}',
+            'nest_summary' => 'Nest: {nest} (#{id})',
+            'nest_created_count' => 'Eggs created in this nest: {count}',
+            'nest_updated_count' => 'Eggs updated in this nest: {count}',
+            'total_created' => 'Total eggs created: {count}',
+            'total_updated' => 'Total eggs updated: {count}',
+            'dry_author' => 'Author: {author}',
+            'dry_nest' => 'Nest: {nest}',
+            'dry_eggs' => 'Eggs:',
+        ],
+    ];
+}
+
 function canPrompt(): bool
 {
     return !function_exists('posix_isatty') || posix_isatty(STDIN);
+}
+
+function promptRaw(string $label): string
+{
+    fwrite(STDOUT, $label . ': ');
+
+    return trim((string) fgets(STDIN));
 }
 
 function prompt(string $label, string $default): string
@@ -805,9 +981,11 @@ function prompt(string $label, string $default): string
     return $input === '' ? $default : $input;
 }
 
-function confirm(string $label, bool $default): bool
+function confirm(string $label, bool $default, string $lang = 'pt'): bool
 {
-    $suffix = $default ? 'S/n' : 's/N';
+    $suffix = $lang === 'en'
+        ? ($default ? 'Y/n' : 'y/N')
+        : ($default ? 'S/n' : 's/N');
     fwrite(STDOUT, $label . ' [' . $suffix . ']: ');
 
     $input = strtolower(trim((string) fgets(STDIN)));
