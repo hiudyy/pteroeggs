@@ -11,7 +11,7 @@ use Pterodactyl\Services\Eggs\Sharing\EggImporterService;
 use Pterodactyl\Services\Eggs\Sharing\EggUpdateImporterService;
 use Pterodactyl\Services\Nests\NestCreationService;
 
-const DEFAULT_AUTHOR = 'pteroconfig@example.com';
+const DEFAULT_AUTHOR = 'cog-host-manager@example.com';
 
 main($argv);
 
@@ -878,7 +878,7 @@ function translations(): array
 {
     return [
         'pt' => [
-            'app_title' => 'Ptero Eggs Manager',
+            'app_title' => 'Cog Host Manager',
             'menu_import' => '1) Importar eggs',
             'menu_exit' => '0) Sair',
             'menu_prompt' => 'Escolha uma opcao',
@@ -918,7 +918,7 @@ function translations(): array
             'dry_eggs' => 'Eggs:',
         ],
         'en' => [
-            'app_title' => 'Ptero Eggs Manager',
+            'app_title' => 'Cog Host Manager',
             'menu_import' => '1) Import eggs',
             'menu_exit' => '0) Exit',
             'menu_prompt' => 'Choose an option',
